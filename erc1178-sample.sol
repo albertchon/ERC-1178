@@ -1,5 +1,7 @@
+// SPDX-License-Identifier: MIT
+pragma solidity 0.7.5;
 pragma experimental ABIEncoderV2;
-pragma solidity ^0.4.24;
+
 /**
  * @title SafeMath
  * @dev Math operations with safety checks that throw on error
@@ -47,21 +49,21 @@ library SafeMath {
 }
 
 
-contract ERC1178 {
+abstract contract ERC1178 {
     // Required Functions
-    function implementsERC1178() public pure returns (bool);
-    function totalSupply() public view returns (uint256);
-    function individualSupply(uint256 classId) public view returns (uint256);
-    function balanceOf(address owner, uint256 classId) public view returns (uint256);
-    function classesOwned(address owner) public view returns (uint256[]);
-    function transfer(address to, uint256 classId, uint256 quantity) public;
-    function approve(address to, uint256 classId, uint256 quantity) public;
-    function transferFrom(address from, address to, uint256 classId) public;
+    function implementsERC1178() public virtual pure returns (bool);
+    function totalSupply() public virtual view returns (uint256);
+    function individualSupply(uint256 classId) public virtual view returns (uint256);
+    function balanceOf(address owner, uint256 classId) public virtual view returns (uint256);
+    function classesOwned(address owner) public virtual view returns (uint256[] memory);
+    function transfer(address to, uint256 classId, uint256 quantity) public virtual;
+    function approve(address to, uint256 classId, uint256 quantity) public virtual;
+    function transferFrom(address from, address to, uint256 classId) public virtual;
 
     // Optional Functions
-    function name() public pure returns (string);
-    function className(uint256 classId) public view returns (string);
-    function symbol() public pure returns (string);
+    function name() public virtual pure returns (string memory);
+    function className(uint256 classId) public virtual view returns (string memory);
+    function symbol() public virtual pure returns (string memory);
 
     // Required Events
     event Transfer(address indexed from, address indexed to, uint256 indexed classId, uint256 quantity);
@@ -91,7 +93,7 @@ contract MCFTTokenContract is ERC1178 {
   mapping(address => mapping(uint256 => mapping(uint256 => TokenExchangeRate))) exchangeRates;
 
   // Constructor
-  constructor () public {
+  constructor() {
     Owner = msg.sender;
     currentClass = 1;
     tokenCount = 0;
@@ -99,25 +101,25 @@ contract MCFTTokenContract is ERC1178 {
     minTokenPrice = 20000000000000; // (also arbitrary)
   }
 
-  function implementsERC1178() public pure returns (bool) {
+  function implementsERC1178() public override pure returns (bool) {
     return true;
   }
 
-  function totalSupply() public view returns (uint256) {
+  function totalSupply() public override view returns (uint256) {
     return tokenCount;
   }
 
-  function individualSupply(uint256 classId) public view returns (uint256) {
+  function individualSupply(uint256 classId) public override view returns (uint256) {
     return classIdToSupply[classId];
   }
 
-  function balanceOf(address owner, uint256 classId) public view returns (uint256) {
+  function balanceOf(address owner, uint256 classId) public override view returns (uint256) {
     /* if (ownerToClassToBalance[owner] == 0) return 0; */
     return ownerToClassToBalance[owner][classId];
   }
 
   // class of 0 is meaningless and should be ignored.
-  function classesOwned(address owner) public view returns (uint256[]){
+  function classesOwned(address owner) public override view returns (uint256[] memory){
     uint256[] memory tempClasses = new uint256[](currentClass - 1);
     uint256 count = 0;
     for (uint256 i = 1; i < currentClass; i++){
@@ -129,22 +131,22 @@ contract MCFTTokenContract is ERC1178 {
       }
     }
     uint256[] memory classes = new uint256[](count);
-    for (i = 0; i < count; i++){
+    for (uint i = 0; i < count; i++){
       classes[i] = tempClasses[i];
     }
     return classes;
   }
 
-  function transfer(address to, uint256 classId, uint256 quantity) public {
+  function transfer(address to, uint256 classId, uint256 quantity) public override {
     require(ownerToClassToBalance[msg.sender][classId] >= quantity);
     ownerToClassToBalance[msg.sender][classId] -= quantity;
     ownerToClassToBalance[to][classId] += quantity;
     Transactor memory zeroApproval;
-    zeroApproval = Transactor(0x0, 0);
+    zeroApproval = Transactor(address(0), 0);
     approvals[msg.sender][classId] = zeroApproval;
   }
 
-  function approve(address to, uint256 classId, uint256 quantity) public {
+  function approve(address to, uint256 classId, uint256 quantity) public override {
     require(ownerToClassToBalance[msg.sender][classId] >= quantity);
     Transactor memory takerApproval;
     takerApproval = Transactor(to, quantity);
@@ -183,31 +185,31 @@ contract MCFTTokenContract is ERC1178 {
     approvals[to][classIdWanted].amount -= quantityWanted;
   }
 
-  function transferFrom(address from, address to, uint256 classId) public {
+  function transferFrom(address from, address to, uint256 classId) public override {
     Transactor storage takerApproval = approvals[from][classId];
     uint256 quantity = takerApproval.amount;
     require(takerApproval.actor == to && quantity >= ownerToClassToBalance[from][classId]);
     ownerToClassToBalance[from][classId] -= quantity;
     ownerToClassToBalance[to][classId] += quantity;
     Transactor memory zeroApproval;
-    zeroApproval = Transactor(0x0, 0);
+    zeroApproval = Transactor(address(0), 0);
     approvals[from][classId] = zeroApproval;
   }
 
-  function name() public pure returns (string) {
+  function name() public override pure returns (string memory) {
     return "Multi-Class Fungible Token";
   }
 
-  function className(uint256 classId) public view returns (string){
+  function className(uint256 classId) public override view returns (string memory){
     return classNames[classId];
   }
 
-  function symbol() public pure returns (string) {
+  function symbol() public override pure returns (string memory) {
     return "MCFT";
   }
 
   // Call this function to create own token offering
-  function registerEntity(string entityName, uint256 count) public payable returns (bool){
+  function registerEntity(string memory entityName, uint256 count) public payable returns (bool) {
     require(msg.value >= count * minTokenPrice && count >= minCount);
     ownerToClassToBalance[msg.sender][currentClass] = count;
     classNames[currentClass] = entityName;
